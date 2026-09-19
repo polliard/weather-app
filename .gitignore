@@ -1,0 +1,10 @@
+# Dependencies
+node_modules/
+
+# Generated knowledge-graph cache (rebuilt by the graphify session hook)
+.ai/graph.json
+
+# Editor and OS noise
+.DS_Store
+.vscode/
+.idea/
