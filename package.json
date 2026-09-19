@@ -8,12 +8,15 @@
     "node": ">=24"
   },
   "scripts": {
+    "prestart": "node scripts/check-node-version.mjs",
     "start": "node src/app/server.ts",
+    "pretest": "node scripts/check-node-version.mjs",
     "test": "node --test \"src/**/*.test.ts\"",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=\"src/**/*.test.ts\" --test-coverage-exclude=\"src/testing/**\" --test-coverage-lines=95 --test-coverage-branches=85 --test-coverage-functions=90 \"src/**/*.test.ts\"",
     "test:live": "WEATHER_LIVE_TESTS=1 node --test \"src/**/*.live.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "probe": "node src/weather/probe.ts"
+    "probe": "node src/weather/probe.ts",
+    "verify:clean-clone": "node scripts/verify-clean-clone.ts"
   },
   "license": "UNLICENSED",
   "devDependencies": {

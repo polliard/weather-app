@@ -18,7 +18,10 @@ It has two layers:
 
 - Node.js 24 or newer. The code runs directly from the `.ts` sources using
   Node's built-in TypeScript type stripping and test runner, so there are no
-  runtime dependencies.
+  runtime dependencies. `.nvmrc` and `.node-version` pin `24` for nvm, fnm,
+  asdf, and similar version managers, and `npm start` / `npm test` refuse to
+  run on an older Node with a message saying so, instead of failing on the
+  first `.ts` import.
 - The only dev dependencies are `typescript` and `@types/node`, used for
   `npm run typecheck`. Install them with `npm ci`.
 - No API key, account, or other credentials. Open-Meteo's forecast and
@@ -41,6 +44,10 @@ GET requests, so you can bookmark or share a URL like
 
 `PORT` and `HOST` override the listen address, e.g. `PORT=8080 npm start`.
 Stop the server with Ctrl-C.
+
+These steps are checked automatically: `npm run verify:clean-clone` performs
+them in a fresh clone of the committed `HEAD` (see [Verifying a clean
+clone](#verifying-a-clean-clone)).
 
 ## Web interface
 
@@ -132,6 +139,34 @@ functions. The thresholds live in `package.json`.
 followed by `npm run test:coverage`, and is the entry point Praxis uses to
 validate every checkpoint.
 
+## Verifying a clean clone
+
+```sh
+npm run verify:clean-clone                        # offline steps only
+WEATHER_LIVE_TESTS=1 npm run verify:clean-clone   # also run the live suites in the clone
+npm run verify:clean-clone -- --keep              # leave the clone behind for inspection
+npm run verify:clean-clone -- --dir ./somewhere   # clone into a chosen (new) directory
+```
+
+`scripts/verify-clean-clone.ts` proves the quick start above works from a
+fresh checkout rather than from a developer's working tree. It:
+
+1. runs `git clone` of this repository's committed `HEAD` into a new
+   temporary directory (uncommitted changes are deliberately excluded, and the
+   script says so when the working tree is dirty);
+2. runs `npm ci`, `npm run typecheck`, and `npm test` in the clone;
+3. starts the `start` script from the clone's `package.json` on an ephemeral
+   port, checks `GET /healthz`, `GET /`, and a `400` for bad input, then sends
+   `SIGTERM` and requires a clean exit;
+4. runs `npm run test:live` in the clone when `WEATHER_LIVE_TESTS=1` is set;
+5. removes the clone on success and keeps it, printing the path, on failure.
+
+It exits `0` when every step passed, `1` when a step failed, and `2` on a
+usage error. It needs `git` and `npm` on the `PATH`; `npm ci` needs network
+access unless the two dev dependencies are already in the npm cache. Because
+it clones and installs, it is not part of `./.praxis/validate`; run it before
+publishing a release or after changing anything in the quick start.
+
 ## Layout
 
 ```
@@ -157,6 +192,12 @@ src/app/
 
 src/testing/
   process.ts                Spawns the real `npm start` / `npm run probe` scripts for entry-point tests
+
+scripts/
+  verify-clean-clone.ts     `npm run verify:clean-clone`: proves the quick start works from a fresh clone
+  check-node-version.mjs    `prestart` / `pretest` guard: fails early with a clear message on Node < 24
+
+.nvmrc, .node-version       Pin Node.js 24 for version managers
 ```
 
 ## Using the data source directly
