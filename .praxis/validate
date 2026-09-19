@@ -5,5 +5,12 @@ set -eu
 
 cd "$(dirname "$0")/.."
 
+if [ -x node_modules/.bin/tsc ]; then
+  echo "==> npm run typecheck"
+  npm run typecheck
+else
+  echo "==> typecheck skipped: dev dependencies not installed (run 'npm ci')"
+fi
+
 echo "==> npm test"
 npm test
