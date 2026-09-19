@@ -1,0 +1,9 @@
+#!/bin/sh
+# Praxis validation entry point: runs the repository's automated checks.
+# Invoked by Praxis on every checkpoint; must exit non-zero on any failure.
+set -eu
+
+cd "$(dirname "$0")/.."
+
+echo "==> npm test"
+npm test

@@ -18,6 +18,9 @@ fixture implementation for offline development and tests.
 npm test
 ```
 
+`./.praxis/validate` runs the same checks and is the entry point Praxis uses
+to validate every checkpoint.
+
 ## Layout
 
 ```
