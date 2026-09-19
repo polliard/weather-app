@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { npmScript, runNode } from "../testing/process.ts";
 import { WeatherSourceError } from "./errors.ts";
 import { PROBE_USAGE, ProbeUsageError, parseProbeArgs, runProbe } from "./probe.ts";
+
+/** The script `npm run probe` runs, relative to the repository root. */
+const PROBE_ENTRY = "src/weather/probe.ts";
 import { StaticWeatherDataSource } from "./static.ts";
 import type { WeatherDataSource, WeatherReport } from "./types.ts";
 
@@ -159,5 +163,30 @@ describe("runProbe", () => {
 
     assert.equal(code, 1);
     assert.equal(err[0], "flaky network: offline");
+  });
+});
+
+/**
+ * Exercises the real `npm run probe` entry point as a separate process.
+ * Both cases fail before any request is made, so this stays offline.
+ */
+describe("npm run probe entry point", { timeout: 30_000 }, () => {
+  it("is the script these tests execute", () => {
+    assert.equal(npmScript("probe"), `node ${PROBE_ENTRY}`);
+  });
+
+  it("prints usage and exits 2 when no coordinates are given", async () => {
+    const result = await runNode(PROBE_ENTRY);
+    assert.equal(result.code, 2);
+    assert.equal(result.stdout, "");
+    assert.match(result.stderr, /expected 2 or 3 arguments/);
+    assert.ok(result.stderr.includes(PROBE_USAGE), result.stderr);
+  });
+
+  it("reports an out-of-range coordinate from the real source and exits 1", async () => {
+    const result = await runNode(PROBE_ENTRY, ["91", "0"]);
+    assert.equal(result.code, 1);
+    assert.equal(result.stdout, "");
+    assert.match(result.stderr, /^open-meteo invalid-input: /m);
   });
 });

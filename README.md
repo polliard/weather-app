@@ -95,24 +95,42 @@ stderr), and `2` on a usage error.
 ## Testing
 
 ```sh
-npm test            # all offline tests; the live suites are skipped by default
-npm run test:live   # integration tests against the real Open-Meteo APIs
-npm run typecheck   # tsc --noEmit
+npm test               # all offline tests; the live suites are skipped by default
+npm run test:coverage  # the same tests, failing if coverage drops below the floor
+npm run test:live      # integration tests against the real Open-Meteo APIs
+npm run typecheck      # tsc --noEmit
 ```
 
-Unit tests inject fake `fetch` implementations and in-memory sources, so
-they are deterministic and never touch the network. The application tests
-cover parameter parsing, HTML rendering, every route's success and failure
-responses, and the HTTP server itself on an ephemeral port.
+The tests use only Node's built-in `node:test` runner and `node:assert`, so
+there is nothing extra to install. They are organised in three layers:
 
-The live suites (`src/**/*.live.test.ts`) run only when
-`WEATHER_LIVE_TESTS=1` is set. They verify that the real provider returns a
-well-formed report, and that the running app geocodes a real place, serves
-its weather as JSON, and renders it as HTML.
+- **Unit and integration tests** (`src/**/*.test.ts`) inject fake `fetch`
+  implementations and in-memory sources, so they are deterministic and never
+  touch the network. They cover the data-source contract and every provider
+  response shape (success, transport failure, upstream error, malformed
+  body), place search, unit conversion and formatting, HTML rendering and
+  escaping, parameter parsing, every route's success and failure responses,
+  and the HTTP adapter on an ephemeral port.
+- **Entry-point tests** (in `server.test.ts` and `probe.test.ts`) spawn the
+  exact scripts behind `npm start` and `npm run probe` as child processes,
+  the way a user runs them from a clean clone. They check that the server
+  honours `PORT`/`HOST`, answers requests, shuts down cleanly on `SIGTERM`,
+  and rejects a bad `PORT`; and that the probe exits with the documented
+  codes. Only requests that never reach the provider are made, so this layer
+  is offline too. The helper lives in `src/testing/process.ts`.
+- **Live tests** (`src/**/*.live.test.ts`) run only when
+  `WEATHER_LIVE_TESTS=1` is set. They verify that the real provider returns a
+  well-formed report, and that the running app geocodes a real place, serves
+  its weather as JSON, and renders it as HTML.
+
+`npm run test:coverage` runs the offline layers under Node's built-in
+coverage and fails if application code (everything under `src/` except
+`src/testing/`) falls below 95% of lines, 85% of branches, or 90% of
+functions. The thresholds live in `package.json`.
 
 `./.praxis/validate` runs the typecheck (when dev dependencies are installed)
-followed by `npm test`, and is the entry point Praxis uses to validate every
-checkpoint.
+followed by `npm run test:coverage`, and is the entry point Praxis uses to
+validate every checkpoint.
 
 ## Layout
 
@@ -136,6 +154,9 @@ src/app/
   server.ts                 `npm start` entry point: Node http adapter
   app.live.test.ts          Opt-in end-to-end test against the real APIs
   fixtures.ts               Shared offline fixtures for the app tests
+
+src/testing/
+  process.ts                Spawns the real `npm start` / `npm run probe` scripts for entry-point tests
 ```
 
 ## Using the data source directly

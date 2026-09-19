@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node src/app/server.ts",
     "test": "node --test \"src/**/*.test.ts\"",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=\"src/**/*.test.ts\" --test-coverage-exclude=\"src/testing/**\" --test-coverage-lines=95 --test-coverage-branches=85 --test-coverage-functions=90 \"src/**/*.test.ts\"",
     "test:live": "WEATHER_LIVE_TESTS=1 node --test \"src/**/*.live.test.ts\"",
     "typecheck": "tsc --noEmit",
     "probe": "node src/weather/probe.ts"

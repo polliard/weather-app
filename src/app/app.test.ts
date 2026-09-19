@@ -179,6 +179,15 @@ describe("GET /", () => {
     assert.match(response.body, /Weather service error/);
   });
 
+  it("returns 502 and explains when the provider sends unusable data", async () => {
+    const weather = failingSource(new WeatherSourceError("invalid-response", "open-meteo", "expected daily to be an object"));
+    const response = await get(buildApp({ weather }), "/?q=austin");
+    assert.equal(response.status, 502);
+    assert.equal(response.headers["content-type"], HTML_CONTENT_TYPE);
+    assert.match(response.body, /Unexpected weather data/);
+    assert.match(response.body, /expected daily to be an object/);
+  });
+
   it("rethrows unexpected errors so the transport can report a 500", async () => {
     const weather = failingSource(new RangeError("boom"));
     await assert.rejects(get(buildApp({ weather }), "/?q=austin"), RangeError);
@@ -221,6 +230,11 @@ describe("GET /api/weather", () => {
     assert.deepEqual(parseJson(response), {
       error: { kind: "invalid-response", source: "open-meteo", message: "expected current to be an object" },
     });
+  });
+
+  it("rethrows unexpected errors instead of disguising them as provider failures", async () => {
+    const weather = failingSource(new RangeError("boom"));
+    await assert.rejects(get(buildApp({ weather }), "/api/weather?lat=30.27&lon=-97.74"), RangeError);
   });
 });
 

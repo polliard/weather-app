@@ -201,6 +201,52 @@ describe("OpenMeteoDataSource", () => {
     assert.match(error.message, /current\.temperature_2m/);
   });
 
+  it("names the offending field when a section has the wrong shape", async () => {
+    const source = new OpenMeteoDataSource();
+    const invalid = (pattern: RegExp) => (error: unknown) => {
+      assert.ok(error instanceof WeatherSourceError);
+      assert.equal(error.kind, "invalid-response");
+      assert.equal(error.source, "open-meteo");
+      assert.match(error.message, pattern);
+      return true;
+    };
+
+    assert.throws(() => source.parseReport(["not", "an", "object"], AUSTIN, 3), invalid(/response body to be an object/));
+    assert.throws(() => source.parseReport(null, AUSTIN, 3), invalid(/response body to be an object/));
+
+    const noTimezone = sampleBody();
+    noTimezone["timezone"] = "";
+    assert.throws(() => source.parseReport(noTimezone, AUSTIN, 3), invalid(/timezone to be a non-empty string/));
+
+    const currentNotObject = sampleBody();
+    currentNotObject["current"] = "sunny";
+    assert.throws(() => source.parseReport(currentNotObject, AUSTIN, 3), invalid(/expected current to be an object/));
+
+    const dailyNotArray = sampleBody();
+    (dailyNotArray["daily"] as Record<string, unknown>)["time"] = "2026-09-18";
+    assert.throws(() => source.parseReport(dailyNotArray, AUSTIN, 3), invalid(/daily\.time to be an array/));
+
+    const dateNotString = sampleBody();
+    (dateNotString["daily"] as Record<string, unknown[]>)["time"]![0] = 20260918;
+    assert.throws(() => source.parseReport(dateNotString, AUSTIN, 3), invalid(/daily\.time\[0\] to be a non-empty string/));
+
+    const highNotNumber = sampleBody();
+    (highNotNumber["daily"] as Record<string, unknown[]>)["temperature_2m_max"]![1] = "33";
+    assert.throws(() => source.parseReport(highNotNumber, AUSTIN, 3), invalid(/daily\.temperature_2m_max\[1\]/));
+
+    // A well-formed body still parses through the same entry point.
+    assert.equal(source.parseReport(sampleBody(), AUSTIN, 3).daily.length, 3);
+  });
+
+  it("falls back to a generic reason when an upstream error has none", async () => {
+    const { fetch } = fakeFetch(() => jsonResponse({ error: true }, 503));
+    const source = new OpenMeteoDataSource({ fetch });
+
+    const error = await expectError(source.fetchWeather(AUSTIN), "upstream");
+    assert.equal(error.status, 503);
+    assert.match(error.message, /HTTP 503: no error reason provided/);
+  });
+
   it("rejects daily arrays of mismatched length", async () => {
     const body = sampleBody();
     (body["daily"] as Record<string, unknown[]>)["temperature_2m_min"] = [22];

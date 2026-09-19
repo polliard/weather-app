@@ -159,6 +159,35 @@ describe("OpenMeteoGeocoder", () => {
 
     const notArray = new OpenMeteoGeocoder({ fetch: async () => jsonResponse({ results: "nope" }) });
     await assert.rejects(notArray.searchPlaces("austin"), /results to be an array/);
+
+    const notObject = new OpenMeteoGeocoder({ fetch: async () => jsonResponse(["Austin"]) });
+    await assert.rejects(notObject.searchPlaces("austin"), /response body to be an object/);
+  });
+
+  it("names the offending field when a result entry is malformed", () => {
+    const geocoder = new OpenMeteoGeocoder();
+    const invalid = (pattern: RegExp) => (error: unknown) => {
+      assert.ok(error instanceof WeatherSourceError);
+      assert.equal(error.kind, "invalid-response");
+      assert.match(error.message, pattern);
+      return true;
+    };
+    assert.throws(() => geocoder.parsePlaces({ results: ["Austin"] }), invalid(/results\[0\] to be an object/));
+    assert.throws(() => geocoder.parsePlaces({ results: [{ name: "", latitude: 1, longitude: 2 }] }), invalid(/results\[0\]\.name/));
+    assert.throws(() => geocoder.parsePlaces({ results: [{ name: "A", latitude: "1", longitude: 2 }] }), invalid(/results\[0\]\.latitude/));
+    assert.throws(() => geocoder.parsePlaces({ results: [{ name: "A", latitude: 1, longitude: Number.NaN }] }), invalid(/results\[0\]\.longitude/));
+    assert.throws(() => geocoder.parsePlaces({ results: [{}, { name: "A", latitude: 1 }] }), invalid(/results\[0\]\.name/));
+  });
+
+  it("falls back to a generic reason when an upstream error has none", async () => {
+    const geocoder = new OpenMeteoGeocoder({ fetch: async () => jsonResponse({}, 500) });
+    await assert.rejects(geocoder.searchPlaces("austin"), (error: unknown) => {
+      assert.ok(error instanceof WeatherSourceError);
+      assert.equal(error.kind, "upstream");
+      assert.equal(error.status, 500);
+      assert.match(error.message, /HTTP 500: no error reason provided/);
+      return true;
+    });
   });
 
   it("passes the abort signal through to fetch", async () => {

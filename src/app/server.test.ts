@@ -3,10 +3,14 @@ import { after, before, describe, it } from "node:test";
 
 import { StaticWeatherDataSource } from "../weather/static.ts";
 import type { WeatherReport } from "../weather/types.ts";
+import { npmScript, runNode, startNode } from "../testing/process.ts";
 import { createWeatherApp, type WeatherApp } from "./app.ts";
 import { AUSTIN_PLACE, AUSTIN_REPORT } from "./fixtures.ts";
 import { StaticGeocoder } from "./geocode.ts";
 import { DEFAULT_HOST, DEFAULT_PORT, optionsFromEnv, startServer, type RunningServer } from "./server.ts";
+
+/** The script `npm start` runs, relative to the repository root. */
+const SERVER_ENTRY = "src/app/server.ts";
 
 describe("optionsFromEnv", () => {
   it("returns no overrides when PORT and HOST are unset or empty", () => {
@@ -102,5 +106,50 @@ describe("startServer", () => {
       console.error = originalError;
       await brokenServer.close();
     }
+  });
+});
+
+/**
+ * Exercises the real `npm start` entry point as a separate process, the way
+ * a user runs it. Only routes that never contact the weather provider are
+ * requested, so this stays offline.
+ */
+describe("npm start entry point", { timeout: 30_000 }, () => {
+  it("is the script these tests execute", () => {
+    assert.equal(npmScript("start"), `node ${SERVER_ENTRY}`);
+  });
+
+  it("listens on the configured port, serves requests, and shuts down cleanly on SIGTERM", async () => {
+    const started = await startNode(SERVER_ENTRY, [], { PORT: "0", HOST: "127.0.0.1" }, /weather app listening on (http:\/\/\S+)/);
+    const url = started.ready[1];
+    assert.ok(url !== undefined);
+    assert.match(url, /^http:\/\/127\.0\.0\.1:\d+$/);
+    assert.notEqual(new URL(url).port, "0");
+
+    try {
+      const health = await fetch(`${url}/healthz`);
+      assert.equal(health.status, 200);
+      assert.deepEqual(await health.json(), { status: "ok", weatherSource: "open-meteo", geocoder: "open-meteo-geocoding" });
+
+      const landing = await fetch(`${url}/`);
+      assert.equal(landing.status, 200);
+      assert.equal(landing.headers.get("content-type"), "text/html; charset=utf-8");
+      assert.match(await landing.text(), /<form/);
+
+      const badRequest = await fetch(`${url}/api/weather?lat=abc&lon=0`);
+      assert.equal(badRequest.status, 400);
+    } finally {
+      started.child.kill("SIGTERM");
+    }
+
+    const result = await started.exited();
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /received SIGTERM, shutting down/);
+  });
+
+  it("refuses to start with an unusable PORT and says why", async () => {
+    const result = await runNode(SERVER_ENTRY, [], { PORT: "not-a-port" });
+    assert.notEqual(result.code, 0);
+    assert.match(result.stderr, /PORT must be an integer in \[0, 65535\], got "not-a-port"/);
   });
 });

@@ -12,5 +12,8 @@ else
   echo "==> typecheck skipped: dev dependencies not installed (run 'npm ci')"
 fi
 
-echo "==> npm test"
-npm test
+# Runs every offline test and fails if coverage of the application code
+# drops below the floor declared in package.json (lines 95%, branches 85%,
+# functions 90%). Test support under src/testing/ is excluded from the floor.
+echo "==> npm run test:coverage"
+npm run test:coverage
